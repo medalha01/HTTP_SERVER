@@ -1,4 +1,5 @@
 import socket
+import threading
 
 
 class HTTPResponseHandler:
@@ -82,36 +83,43 @@ class EchoServer:
         server_socket = socket.create_server((self.host, self.port), reuse_port=True)
         while True:
             client_socket, address = server_socket.accept()
-            print(f"A request received from {address}")
-            request = client_socket.recv(4096)
-            (
-                http_method,
-                request_path,
-                http_version,
-                header_info,
-            ) = HTTPRequestDecoder.decode_request(request)
-            print(
-                f"Method: {http_method}\nPath: {request_path}\nVersion: {http_version}"
+            client_thread = threading.Thread(
+                target=EchoServer.routine, args=(client_socket, address)
             )
-            print(f"Headers: {header_info}")
-            header_construct = Header(header_info)
-            user_input = HTTPRequestDecoder.get_user_line(request_path)
-            client_socket.send(
-                HTTPResponseHandler.get_response(
-                    HTTPRequestDecoder.extract_request(request_path),
-                    user_input,
-                    header_construct,
-                )
+            client_thread.start()
+
+    @staticmethod
+    def routine(client_socket, address):
+        print(f"A request received from {address}")
+        request = client_socket.recv(4096)
+        (
+            http_method,
+            request_path,
+            http_version,
+            header_info,
+        ) = HTTPRequestDecoder.decode_request(request)
+        print(f"Method: {http_method}\nPath: {request_path}\nVersion: {http_version}")
+        print(f"Headers: {header_info}")
+        header_construct = Header(header_info)
+        user_input = HTTPRequestDecoder.get_user_line(request_path)
+        client_socket.send(
+            HTTPResponseHandler.get_response(
+                HTTPRequestDecoder.extract_request(request_path),
+                user_input,
+                header_construct,
             )
-            client_socket.close()
+        )
+        client_socket.close()
 
 
 class Header:
     def __init__(self, header_input):
         self.header_input = header_input
-        self.host = header_input[0]
-        self.user_agent = header_input[1]
-        self.accept_enconding = header_input[2]
+        ##check to test
+        if len(header_input) > 3:
+            self.host = header_input[0]
+            self.user_agent = header_input[1]
+            self.accept_enconding = header_input[2]
 
     def get_host(self):
         return self.host.split(":")[1].strip(" ")
