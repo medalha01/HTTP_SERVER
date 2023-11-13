@@ -8,13 +8,17 @@ class HTTPResponseHandler:
     TEXT_PLAIN = "Content-Type: text/plain"
 
     @staticmethod
-    def get_response(request_path, user_input):
-        print(request_path, user_input)
+    def get_response(request_path, user_input, header_construct):
+        print("test:", request_path, user_input)
         match request_path:
             case "/":
                 return HTTPResponseHandler.HTTP_RESPONSE_200
             case "/echo/":
                 return HTTPResponseHandler.response_200_builder(user_input)
+            case "/user-agent":
+                return HTTPResponseHandler.response_200_builder(
+                    header_construct.get_user_agent()
+                )
             case _:
                 return HTTPResponseHandler.HTTP_RESPONSE_400
 
@@ -28,6 +32,7 @@ class HTTPResponseHandler:
             "",
         ]
         response = "\r\n".join(response_headers) + user_input
+        print(response)
         return response.encode()
 
 
@@ -37,7 +42,8 @@ class HTTPRequestDecoder:
         decoded_request = request.decode("utf-8")
         split_request = decoded_request.splitlines()
         http_method, request_path, http_version = split_request[0].split(" ")
-        return http_method, request_path, http_version
+        header_info = split_request[1:]
+        return http_method, request_path, http_version, header_info
 
     @staticmethod
     def get_user_line(request_path):
@@ -78,19 +84,43 @@ class EchoServer:
             client_socket, address = server_socket.accept()
             print(f"A request received from {address}")
             request = client_socket.recv(4096)
-            http_method, request_path, http_version = HTTPRequestDecoder.decode_request(
-                request
-            )
+            (
+                http_method,
+                request_path,
+                http_version,
+                header_info,
+            ) = HTTPRequestDecoder.decode_request(request)
             print(
                 f"Method: {http_method}\nPath: {request_path}\nVersion: {http_version}"
             )
+            print(f"Headers: {header_info}")
+            header_construct = Header(header_info)
             user_input = HTTPRequestDecoder.get_user_line(request_path)
             client_socket.send(
                 HTTPResponseHandler.get_response(
-                    HTTPRequestDecoder.extract_request(request_path), user_input
+                    HTTPRequestDecoder.extract_request(request_path),
+                    user_input,
+                    header_construct,
                 )
             )
             client_socket.close()
+
+
+class Header:
+    def __init__(self, header_input):
+        self.header_input = header_input
+        self.host = header_input[0]
+        self.user_agent = header_input[1]
+        self.accept_enconding = header_input[2]
+
+    def get_host(self):
+        return self.host.split(":")[1].strip(" ")
+
+    def get_user_agent(self):
+        return self.user_agent.split(":")[1].strip(" ")
+
+    def get_accept_encoding(self):
+        return self.accept_enconding.split(":")[1].strip(" ")
 
 
 if __name__ == "__main__":
