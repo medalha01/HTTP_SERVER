@@ -32,8 +32,8 @@ class HTTPRequestDecoder:
     def decode_request(request):
         decoded_request = request.decode("utf-8")
         split_request = decoded_request.splitlines()
-        HTTP_method, request_path, HTTP_version = split_request[0].split(" ")
-        return HTTP_method, request_path, HTTP_version
+        http_method, request_path, http_version = split_request[0].split(" ")
+        return http_method, request_path, http_version
 
     @staticmethod
     def get_user_line(request_path):
@@ -52,10 +52,10 @@ class HTTPRequestDecoder:
         for char in request_path:
             if char == "/":
                 user_input += char
-                if interaction_flag == True:
+                if interaction_flag is True:
                     return user_input
                 interaction_flag = True
-            elif interaction_flag == True:
+            elif interaction_flag is True:
                 user_input += char
         return user_input
 
@@ -69,13 +69,13 @@ class EchoServer:
         server_socket = socket.create_server((self.host, self.port), reuse_port=True)
         while True:
             client_socket, address = server_socket.accept()
-            print("A request received from {}".format(address))
+            print(f"A request received from {address}")
             request = client_socket.recv(4096)
-            HTTP_method, request_path, HTTP_version = HTTPRequestDecoder.decode_request(
+            http_method, request_path, http_version = HTTPRequestDecoder.decode_request(
                 request
             )
             print(
-                f"Method: {HTTP_method}\nPath: {request_path}\nVersion: {HTTP_version}"
+                f"Method: {http_method}\nPath: {request_path}\nVersion: {http_version}"
             )
             user_input = HTTPRequestDecoder.get_user_line(request_path)
             client_socket.send(
