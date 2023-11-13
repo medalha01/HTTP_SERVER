@@ -14,17 +14,21 @@ class HTTPResponseHandler:
             case "/":
                 return HTTPResponseHandler.HTTP_RESPONSE_200
             case "/echo/":
-                response_headers = [
-                    HTTPResponseHandler.HTTP_200,
-                    HTTPResponseHandler.TEXT_PLAIN,
-                    f"Content-Length: {len(user_input)}",
-                    "",
-                    "",
-                ]
-                response = "\r\n".join(response_headers) + user_input
-                return response.encode()
+                return HTTPResponseHandler.response_200_builder(user_input)
             case _:
                 return HTTPResponseHandler.HTTP_RESPONSE_400
+
+    @staticmethod
+    def response_200_builder(user_input):
+        response_headers = [
+            HTTPResponseHandler.HTTP_200,
+            HTTPResponseHandler.TEXT_PLAIN,
+            f"Content-Length: {len(user_input)}",
+            "",
+            "",
+        ]
+        response = "\r\n".join(response_headers) + user_input
+        return response.encode()
 
 
 class HTTPRequestDecoder:
@@ -37,13 +41,16 @@ class HTTPRequestDecoder:
 
     @staticmethod
     def get_user_line(request_path):
+        final_user_input = ""
         string_list = request_path.split("/")
         if len(string_list) < 4:
             return ""
-        user_input1 = string_list[2]
-        user_input2 = "/"
-        user_input3 = string_list[3]
-        return user_input1 + user_input2 + user_input3
+        for iterator_number in range(len(string_list)):
+            if iterator_number > 1:
+                user_input = string_list[iterator_number]
+                final_user_input += user_input
+                final_user_input += "/"
+        return final_user_input[:-1]
 
     @staticmethod
     def extract_request(request_path):
