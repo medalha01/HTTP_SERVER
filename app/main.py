@@ -1,5 +1,6 @@
 import socket
 import threading
+from concurrent.futures import ThreadPoolExecutor
 
 
 class HTTPResponseHandler:
@@ -80,13 +81,29 @@ class EchoServer:
         self.port = port
 
     def start(self):
-        server_socket = socket.create_server((self.host, self.port), reuse_port=True)
-        while True:
-            client_socket, address = server_socket.accept()
-            client_thread = threading.Thread(
-                target=EchoServer.routine, args=(client_socket, address)
-            )
-            client_thread.start()
+        try:
+            with socket.create_server(
+                (self.host, self.port), reuse_port=True
+            ) as server_socket:
+                with ThreadPoolExecutor(max_workers=10) as executor:
+                    while True:
+                        client_socket, address = server_socket.accept()
+                        executor.submit(EchoServer.routine, client_socket, address)
+        except KeyboardInterrupt:
+            print("Server stopped")
+            client_socket.close()
+            exit(0)
+        except Exception as e:
+            print(e.__class__.__name__, ":", e)
+            client_socket.close()
+            exit(1)
+        ##server_socket = socket.create_server((self.host, self.port), reuse_port=True)
+        ##while True:
+        ##    client_socket, address = server_socket.accept()
+        ##    client_thread = threading.Thread(
+        ##        target=EchoServer.routine, args=(client_socket, address)
+        ##    )
+        ##    client_thread.start()
 
     @staticmethod
     def routine(client_socket, address):
