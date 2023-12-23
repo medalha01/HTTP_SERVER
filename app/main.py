@@ -1,41 +1,92 @@
 import socket
-import threading
+
+##import threading
+import os
 from concurrent.futures import ThreadPoolExecutor
 
 
 class HTTPResponseHandler:
     HTTP_RESPONSE_200 = b"HTTP/1.1 200 OK\r\n\r\n"
     HTTP_RESPONSE_400 = b"HTTP/1.1 404 Not Found\r\n\r\n"
+    HTTP_RESPONSE_404 = b"HTTP/1.1 400 Bad Request\r\n\r\n"
     HTTP_200 = "HTTP/1.1 200 OK"
     TEXT_PLAIN = "Content-Type: text/plain"
+    OCTET_STREAM = "Content-Type: application/octet-stream"
+    # Get the absolute path of the main.py file
+    main_file_path = os.path.abspath(__file__)
+
+    # Get the directory of the main.py file
+    main_dir = os.path.dirname(main_file_path)
+
+    # Get the parent directory (father directory) of the main.py file
+    parent_dir = os.path.dirname(main_dir)
+
+    # Construct the path to the 'archives' directory within the parent directory
+    archives_dir = os.path.join(parent_dir, "archives")
 
     @staticmethod
-    def get_response(request_path, user_input, header_construct):
-        print("test:", request_path, user_input)
+    def get_response(request_path, user_input, header_construct, full_request):
+        print("Path:", request_path)
+        print("User Input:", user_input)
+        print("Host:", header_construct.get_host())
+        print("User Agent:", header_construct.get_user_agent())
+        print("Accept Encoding:", header_construct.get_accept_encoding())
+        print("Full Request:", full_request)
         match request_path:
             case "/":
                 return HTTPResponseHandler.HTTP_RESPONSE_200
             case "/echo/":
-                return HTTPResponseHandler.response_200_builder(user_input)
-            case "/user-agent":
-                return HTTPResponseHandler.response_200_builder(
-                    header_construct.get_user_agent()
+                return HTTPResponseHandler.response_builder(
+                    user_input,
+                    HTTPResponseHandler.HTTP_200,
+                    HTTPResponseHandler.TEXT_PLAIN,
                 )
+            case "/user-agent":
+                return HTTPResponseHandler.response_builder(
+                    header_construct.get_user_agent(),
+                    HTTPResponseHandler.HTTP_200,
+                    HTTPResponseHandler.TEXT_PLAIN,
+                )
+            case ("/files/"):
+                print("File requested")
+                file_name = full_request.replace("/files/", "")
+                print("File Path:", file_name)
+                file_path = os.path.join(HTTPResponseHandler.archives_dir, file_name)
+                print("Full File Path:", file_path)
+                try:
+                    with open(file_path, "rb") as file:
+                        file_content = file.read().decode("utf-8")
+                        return HTTPResponseHandler.response_builder(
+                            file_content,
+                            HTTPResponseHandler.HTTP_200,
+                            "Content-Type: application/octet-stream",
+                        )
+                except FileNotFoundError:
+                    print("File not found")
+                    return HTTPResponseHandler.HTTP_RESPONSE_400
+                # File not found
+                except Exception as e:
+                    print(f"Error reading file: {e}")
+                    return HTTPResponseHandler.HTTP_RESPONSE_400
             case _:
                 return HTTPResponseHandler.HTTP_RESPONSE_400
 
     @staticmethod
-    def response_200_builder(user_input):
+    def response_builder(content, http_code, content_type):
+        if isinstance(content, str):
+            # If content is a string, encode it to bytes
+            content = content.encode("utf-8")
         response_headers = [
-            HTTPResponseHandler.HTTP_200,
-            HTTPResponseHandler.TEXT_PLAIN,
-            f"Content-Length: {len(user_input)}",
+            http_code,
+            content_type,
+            f"Content-Length: {len(content)}",
             "",
             "",
         ]
-        response = "\r\n".join(response_headers) + user_input
+        response = "\r\n".join(response_headers)
         print(response)
-        return response.encode()
+        encoded_response = response.encode("utf-8")
+        return encoded_response + content
 
 
 class HTTPRequestDecoder:
@@ -51,7 +102,7 @@ class HTTPRequestDecoder:
     def get_user_line(request_path):
         final_user_input = ""
         string_list = request_path.split("/")
-        if len(string_list) < 4:
+        if len(string_list) < 3:
             return ""
         for iterator_number in range(len(string_list)):
             if iterator_number > 1:
@@ -75,7 +126,7 @@ class HTTPRequestDecoder:
         return user_input
 
 
-class EchoServer:
+class Server:
     def __init__(self, host, port):
         self.host = host
         self.port = port
@@ -88,7 +139,7 @@ class EchoServer:
                 with ThreadPoolExecutor(max_workers=10) as executor:
                     while True:
                         client_socket, address = server_socket.accept()
-                        executor.submit(EchoServer.routine, client_socket, address)
+                        executor.submit(Server.routine, client_socket, address)
         except KeyboardInterrupt:
             print("Server stopped")
             client_socket.close()
@@ -119,14 +170,16 @@ class EchoServer:
         print(f"Headers: {header_info}")
         header_construct = Header(header_info)
         user_input = HTTPRequestDecoder.get_user_line(request_path)
-        client_socket.send(
+        client_socket.sendall(
             HTTPResponseHandler.get_response(
                 HTTPRequestDecoder.extract_request(request_path),
                 user_input,
                 header_construct,
+                request_path,
             )
         )
         client_socket.close()
+        print(f"Connection with {address} closed")
 
 
 class Header:
@@ -136,7 +189,7 @@ class Header:
         if len(header_input) > 3:
             self.host = header_input[0]
             self.user_agent = header_input[1]
-            self.accept_enconding = header_input[2]
+            self.accept_encoding = header_input[2]
 
     def get_host(self):
         return self.host.split(":")[1].strip(" ")
@@ -145,9 +198,10 @@ class Header:
         return self.user_agent.split(":")[1].strip(" ")
 
     def get_accept_encoding(self):
-        return self.accept_enconding.split(":")[1].strip(" ")
+        return self.accept_encoding.split(":")[1].strip(" ")
 
 
 if __name__ == "__main__":
-    server = EchoServer("localhost", 4221)
+    server = Server("localhost", 4221)
     server.start()
+
